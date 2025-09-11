@@ -276,3 +276,5 @@ if __name__ == "__main__":
     root.geometry("470x500")  # 增加窗口高度以容纳日期信息
     app = StudyPlanApp(root)
     root.mainloop()
+
+# pyinstaller -F -w ./src/plan.py --distpath ./output/dist --workpath ./output/build
