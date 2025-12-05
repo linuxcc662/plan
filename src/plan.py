@@ -4,6 +4,9 @@ from tkinter import ttk
 import json
 import os
 from datetime import datetime
+import matplotlib
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
 class StudyPlanApp:
@@ -176,6 +179,137 @@ class StudyPlanApp:
             self.create_date_label.config(text="创建日期：")
             self.last_punch_label.config(text="最新打卡：")
 
+    def show_task_detail(self, task_idx):
+        task = self.tasks[task_idx]
+        detail_win = tk.Toplevel(self.root)
+        detail_win.title(f"任务详情 - {task['name']}")
+        detail_win.geometry("480x450")  # 增加窗口宽度以适应滚动条
+        detail_win.configure(bg="#f6f8fa")
+
+        # 打卡日期列表 - 改为带滚动条的文本框
+        tk.Label(detail_win, text="打卡日期列表：", font=("微软雅黑", 11, "bold"), bg="#f6f8fa", fg="#40916c").pack(anchor="w", padx=12, pady=(10, 2))
+        
+        # 创建框架容器
+        date_frame = tk.Frame(detail_win, bg="#f6f8fa")
+        date_frame.pack(fill="both", expand=True, padx=12, pady=(0, 10))
+        
+        # 创建滚动条
+        scrollbar = tk.Scrollbar(date_frame)
+        scrollbar.pack(side="right", fill="y")
+        
+        # 创建文本框显示打卡日期
+        date_text = tk.Text(date_frame, 
+                           height=6,  # 限定显示行数
+                           width=50,  # 限定显示宽度
+                           font=("微软雅黑", 10),
+                           bg="#ffffff",
+                           fg="#333",
+                           wrap="word",  # 自动换行
+                           yscrollcommand=scrollbar.set)
+        date_text.pack(side="left", fill="both", expand=True)
+        
+        # 配置滚动条
+        scrollbar.config(command=date_text.yview)
+        
+        # 插入打卡日期数据
+        if task["punch_dates"]:
+            date_text.insert("1.0", "\n".join(task["punch_dates"]))
+        else:
+            date_text.insert("1.0", "暂无打卡记录")
+        
+        # 设置文本框为只读
+        date_text.config(state="disabled")
+
+        # 图表展示 - 改为数轴显示
+        if task["punch_dates"]:
+            try:
+                # 按时间顺序处理打卡数据
+                from collections import defaultdict
+                import matplotlib.dates as mdates
+                from datetime import datetime
+                
+                # 按日期分组统计打卡次数
+                date_count = defaultdict(int)
+                time_points = []
+                counts = []
+                
+                # 按时间顺序处理打卡记录
+                sorted_dates = sorted(task["punch_dates"])
+                for i, punch_time in enumerate(sorted_dates):
+                    # 解析时间 - 修复格式匹配问题
+                    dt = datetime.strptime(punch_time, "%Y-%m-%d %H:%M")
+                    date_str = dt.strftime("%Y-%m-%d")
+                    
+                    # 统计当日打卡次数
+                    date_count[date_str] += 1
+                    
+                    # 记录每个时间点的打卡次数
+                    time_points.append(dt)
+                    counts.append(date_count[date_str])
+                
+                # 创建图表
+                fig = plt.Figure(figsize=(5, 3), dpi=100)
+                ax = fig.add_subplot(111)
+                
+                # 绘制数轴图表（散点图+连线）
+                ax.plot(time_points, counts, 'o-', color="#52b788", linewidth=2, markersize=6)
+                
+                # 设置图表标题和标签 - 更新X轴标签为"打卡日期"
+                ax.set_title("打卡日期与次数趋势", fontsize=12, fontweight='bold', fontname='SimHei', pad=20)
+                ax.set_xlabel("打卡日期", fontsize=10, fontname='SimHei')
+                ax.set_ylabel("当日累计打卡次数", fontsize=10, fontname='SimHei')
+                
+                # 设置刻度标签字体 - 修改为正体显示
+                for label in ax.get_xticklabels():
+                    label.set_fontname('SimHei')
+                    label.set_style('normal')  # 设置为正体，避免斜体显示
+                for label in ax.get_yticklabels():
+                    label.set_fontname('SimHei')
+                    label.set_style('normal')  # 设置为正体，避免斜体显示
+                
+                # 格式化X轴日期显示 - 只显示日期，不显示时分
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
+                ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+                ax.tick_params(axis='x', rotation=0)  # 改为水平显示
+                
+                # 设置Y轴范围，从0开始，留出顶部空间避免标签重叠
+                y_max = max(counts) if counts else 1
+                ax.set_ylim(bottom=0, top=y_max * 1.2)  # 顶部留出20%空间
+                
+                # 添加网格线
+                ax.grid(True, alpha=0.3)
+                
+                # 在数据点上添加标签显示打卡次数 - 调整位置避免重叠
+                for i, (time_point, count) in enumerate(zip(time_points, counts)):
+                    # 根据数据点位置动态调整标签位置
+                    vertical_offset = 10  # 默认向上偏移
+                    
+                    # 如果数据点接近顶部，标签向下偏移
+                    if count >= y_max * 0.8:
+                        vertical_offset = -15
+                    
+                    ax.annotate(f'{count}', 
+                               (time_point, count), 
+                               textcoords="offset points", 
+                               xytext=(0, vertical_offset), 
+                               ha='center', 
+                               fontsize=8,
+                               color="#2d6a4f",
+                               bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
+                
+                # 调整布局，增加顶部边距
+                fig.subplots_adjust(top=0.85)
+                fig.tight_layout()
+                
+                canvas = FigureCanvasTkAgg(fig, master=detail_win)
+                canvas.draw()
+                canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=8)
+                
+            except Exception as e:
+                tk.Label(detail_win, text=f"图表显示失败：{e}", fg="red", bg="#f6f8fa").pack(pady=8)
+        else:
+            tk.Label(detail_win, text="暂无打卡数据，无法生成图表", fg="#aaa", bg="#f6f8fa").pack(pady=8)
+
     def refresh_list(self):
         for widget in self.task_frame.winfo_children():
             widget.destroy()
@@ -208,54 +342,61 @@ class StudyPlanApp:
                 "微软雅黑", 11), bg="#ffffff", fg="#40916c")
             percent_label.pack(side="left", padx=2)
             
-            # 为所有任务添加问号框（无论是否有备注）
+            # 问号备注框
             question_label = tk.Label(right_frame, text="❓", font=("微软雅黑", 10),
                                      bg="#ffffff", fg="#666", cursor="hand2")
             question_label.pack(side="left", padx=2)
             
-            # 为每个任务创建独立的提示框（如果有备注）
+            # 详情框
+            detail_label = tk.Label(right_frame, text="📊", font=("微软雅黑", 11),
+                                   bg="#ffffff", fg="#40916c", cursor="hand2")
+            detail_label.pack(side="left", padx=2)
+
+            # 备注提示框
             if t.get("description"):
                 def create_tooltip_for_task(task_description):
                     tooltip = tk.Toplevel(self.root)
-                    tooltip.withdraw()  # 初始隐藏
-                    tooltip.overrideredirect(True)  # 去除窗口装饰
+                    tooltip.withdraw()
+                    tooltip.overrideredirect(True)
                     tooltip.configure(bg="#ffffe0", relief="solid", bd=1)
-                    
                     tooltip_label = tk.Label(tooltip, text=task_description, 
                                             font=("微软雅黑", 9), bg="#ffffe0", 
                                             fg="#333", justify="left", wraplength=200)
                     tooltip_label.pack(padx=5, pady=3)
                     return tooltip
-                
-                # 为当前任务创建提示框
                 tooltip = create_tooltip_for_task(t["description"])
-                
-                # 鼠标悬停事件（仅对有备注的任务）
                 def show_tooltip(event, tooltip=tooltip):
                     tooltip.deiconify()
                     tooltip.geometry(f"+{event.x_root+10}+{event.y_root+10}")
-                
                 def hide_tooltip(event, tooltip=tooltip):
                     tooltip.withdraw()
-                
                 question_label.bind("<Enter>", show_tooltip)
                 question_label.bind("<Leave>", hide_tooltip)
                 question_label.bind("<Motion>", show_tooltip)
             
-            # 点击编辑事件（对所有任务有效）
+            # 编辑备注
             def edit_description(event, task_idx=idx):
                 current_description = self.tasks[task_idx].get("description", "")
                 new_description = simpledialog.askstring("编辑备注", 
                                                        "请输入任务备注：", 
                                                        initialvalue=current_description)
-                if new_description is not None:  # 用户点击确定
+                if new_description is not None:
                     self.tasks[task_idx]["description"] = new_description
                     self.save_tasks()
-                    self.refresh_list()  # 刷新列表以更新显示
-            
-            question_label.bind("<Button-1>", edit_description)  # 添加点击事件
-            
-            # 选中效果
+                    self.refresh_list()
+            question_label.bind("<Button-1>", edit_description)
+
+            # 详情弹窗（修改为同时处理选中效果和弹出窗口）
+            def handle_detail_click(event, task_idx=idx):
+                # 先选中任务
+                self.selected_idx = task_idx
+                self.refresh_list()
+                self.update_date_display()
+                # 然后弹出详情窗口
+                self.show_task_detail(task_idx)
+            detail_label.bind("<Button-1>", handle_detail_click)
+
+            # 选中效果（其他元素保持不变）
             def select_row(event, idx=idx):
                 self.selected_idx = idx
                 self.refresh_list()
@@ -264,17 +405,30 @@ class StudyPlanApp:
             label.bind("<Button-1>", select_row)
             bar.bind("<Button-1>", select_row)
             percent_label.bind("<Button-1>", select_row)
+            # 删除这一行：detail_label.bind("<Button-1>", select_row)
             if self.selected_idx == idx:
                 row.config(bg="#e0ffe0")
                 label.config(bg="#e0ffe0")
                 percent_label.config(bg="#e0ffe0")
                 question_label.config(bg="#e0ffe0")
+                detail_label.config(bg="#e0ffe0")
 
 
 if __name__ == "__main__":
     root = tk.Tk()
     root.geometry("470x500")  # 增加窗口高度以容纳日期信息
+    #  # 设置窗口图标
+    # try:
+    #     icon_path = os.path.join(os.path.dirname(__file__), 'study_icon.ico')
+    #     if os.path.exists(icon_path):
+    #         root.iconbitmap(icon_path)
+    # except Exception as e:
+    #     print(f"设置图标时出错: {e}")
     app = StudyPlanApp(root)
     root.mainloop()
 
 # pyinstaller -F -w ./src/plan.py --distpath ./output/dist --workpath ./output/build
+
+# 配置matplotlib中文字体支持
+matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']  # 设置中文字体
+matplotlib.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
