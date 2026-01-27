@@ -22,8 +22,25 @@ class StudyPlanApp:
             "微软雅黑", 22, "bold"), bg="#f6f8fa", fg="#2d6a4f")
         title.pack(pady=(18, 6))
 
-        self.task_frame = tk.Frame(root, bg="#f6f8fa")
-        self.task_frame.pack(pady=10)
+        # 创建滚动容器框架
+        scrollable_frame = tk.Frame(root, bg="#f6f8fa")
+        scrollable_frame.pack(pady=10, fill="both", expand=True)
+        
+        # 添加Canvas组件
+        canvas = tk.Canvas(scrollable_frame, bg="#f6f8fa")
+        canvas.pack(side="left", fill="both", expand=True)
+        
+        # 添加垂直滚动条
+        scrollbar = tk.Scrollbar(scrollable_frame, orient="vertical", command=canvas.yview)
+        scrollbar.pack(side="right", fill="y")
+        
+        # 配置Canvas和滚动条
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        
+        # 创建任务框架，作为Canvas的子组件
+        self.task_frame = tk.Frame(canvas, bg="#f6f8fa")
+        canvas.create_window((0, 0), window=self.task_frame, anchor="nw", width=450)  # 设置宽度与窗口匹配
 
         btn_frame = tk.Frame(root, bg="#f6f8fa")
         btn_frame.pack(pady=10)
