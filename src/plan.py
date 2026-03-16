@@ -22,6 +22,26 @@ class StudyPlanApp:
             "微软雅黑", 22, "bold"), bg="#f6f8fa", fg="#2d6a4f")
         title.pack(pady=(18, 6))
 
+         # 创建左上角按钮框架（放置整理按钮）
+        top_btn_frame = tk.Frame(root, bg="#f6f8fa")
+        top_btn_frame.pack(anchor="w", padx=10, pady=(0, 5))
+        
+        # 整理按钮样式
+        sort_btn_style = {
+            "font": ("微软雅黑", 11, "bold"),
+            "bg": "#40916c",
+            "fg": "white",
+            "activebackground": "#52b788",
+            "activeforeground": "white",
+            "bd": 0,
+            "relief": "ridge",
+            "width": 8,
+            "height": 1,
+            "cursor": "hand2"
+        }
+        tk.Button(top_btn_frame, text="整理", command=self.sort_tasks_by_progress,
+                  **sort_btn_style).pack(side="left")
+
         # 创建滚动容器框架
         scrollable_frame = tk.Frame(root, bg="#f6f8fa")
         scrollable_frame.pack(pady=10, fill="both", expand=True)
@@ -57,6 +77,7 @@ class StudyPlanApp:
             "height": 1,
             "cursor": "hand2"
         }
+    
         tk.Button(btn_frame, text="添加任务", command=self.add_task,
                   **btn_style).pack(side="left", padx=8)
         tk.Button(btn_frame, text="打卡", command=self.punch_task,
@@ -79,6 +100,10 @@ class StudyPlanApp:
         self.last_punch_label = tk.Label(self.date_info_frame, text="最新打卡：", 
                                         font=("微软雅黑", 9), bg="#f6f8fa", fg="#666")
         self.last_punch_label.pack(side="left", padx=10)
+        # 添加完成天数显示标签
+        self.completed_days_label = tk.Label(self.date_info_frame, text="", 
+                                             font=("微软雅黑", 9), bg="#f6f8fa", fg="#40916c")
+        self.completed_days_label.pack(side="left", padx=10)
 
         self.load_tasks()
         self.refresh_list()
@@ -186,15 +211,34 @@ class StudyPlanApp:
         """更新日期信息显示"""
         if self.selected_idx is not None:
             task = self.tasks[self.selected_idx]
-            self.create_date_label.config(text=f"创建日期：{task['create_date']}")
+            # 只显示年月日
+            create_date = task['create_date'][:10] if task['create_date'] else ''
+            self.create_date_label.config(text=f"创建日期：{create_date}")
             if task["punch_dates"]:
-                last_punch = task["punch_dates"][-1]
+                last_punch = task["punch_dates"][-1][:10]  # 只显示年月日
                 self.last_punch_label.config(text=f"最新打卡：{last_punch}")
             else:
                 self.last_punch_label.config(text="最新打卡：暂无打卡记录")
+
+             # 如果任务已完成，显示完成天数
+            if task["done"] and task["punch_dates"]:
+                try:
+                    # 解析创建日期和最新打卡日期
+                    create_dt = datetime.strptime(task['create_date'], "%Y-%m-%d %H:%M")
+                    last_punch_dt = datetime.strptime(task["punch_dates"][-1], "%Y-%m-%d %H:%M")
+                    # 计算完成天数（只计算日期差）
+                    days_completed = (last_punch_dt.date() - create_dt.date()).days
+                    self.completed_days_label.config(text=f"完成天数： {days_completed} 天")
+                except Exception:
+                    self.completed_days_label.config(text="")
+
+            else:
+                self.completed_days_label.config(text="")
+
         else:
             self.create_date_label.config(text="创建日期：")
             self.last_punch_label.config(text="最新打卡：")
+            self.completed_days_label.config(text="")
 
     def show_task_detail(self, task_idx):
         task = self.tasks[task_idx]
@@ -430,6 +474,25 @@ class StudyPlanApp:
                 question_label.config(bg="#e0ffe0")
                 detail_label.config(bg="#e0ffe0")
 
+    
+    def sort_tasks_by_progress(self):
+     """按完成进度排序任务，进度少的在最上方"""
+    # 计算每个任务的完成进度百分比
+     for task in self.tasks:
+        if task["target"] > 0:
+            task["progress_percent"] = int((task["count"] / task["target"]) * 100)
+        else:
+            task["progress_percent"] = 0
+    
+    # 按完成进度排序，进度少的在最上方
+     self.tasks.sort(key=lambda x: x["progress_percent"])
+    
+    # 保存排序后的任务顺序
+     self.save_tasks()
+    
+    # 刷新列表显示
+     self.refresh_list()
+     messagebox.showinfo("整理完成", "任务已按完成进度排序，进度少的在最上方，排序结果已保存")
 
 if __name__ == "__main__":
     root = tk.Tk()
